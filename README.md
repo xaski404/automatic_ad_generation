@@ -1,11 +1,11 @@
-# Automatyczne reklamy wideo (n8n + Claude + Pollo.ai)
+# Automatyczne reklamy wideo (n8n + OpenAI + Pollo.ai)
 
 Workflow n8n, który z krótkiego opisu produktu robi pionową reklamę wideo 9:16 pod TikTok, Instagram Reels i YouTube Shorts.
 
 Etap 1 (ten workflow) obejmuje kroki 1 do 3 planu:
 
 1. **Wejście:** formularz n8n albo webhook `POST` z danymi produktu.
-2. **Scenariusz:** Claude pisze hook, tekst lektora, napisy na ekran, CTA i angielski prompt do wideo.
+2. **Scenariusz:** OpenAI (GPT-4o) pisze hook, tekst lektora, napisy na ekran, CTA i angielski prompt do wideo.
 3. **Generowanie:** Pollo.ai tworzy wideo 9:16, a workflow co 20 s sprawdza status, aż wideo będzie gotowe.
 
 Wersje pod poszczególne platformy, akceptacja i publikacja to kolejne etapy.
@@ -14,7 +14,7 @@ Wersje pod poszczególne platformy, akceptacja i publikacja to kolejne etapy.
 
 ```
 Formularz reklamy ─┐
-                   ├─> Normalizuj dane i ustawienia ─> Zbuduj zapytanie do Claude ─> Claude: scenariusz i prompt
+                   ├─> Normalizuj dane i ustawienia ─> Zbuduj zapytanie do AI ─> OpenAI: scenariusz i prompt
 Webhook API ───────┘
   ─> Parsuj scenariusz ─> Pollo.ai: utwórz wideo ─> Zapamiętaj taskId
   ─> Czekaj 20 s ─> Pollo.ai: status zadania ─> Sprawdź status ─> Wideo gotowe? ─ tak ─> Wynik
@@ -35,11 +35,11 @@ Węzeł **Wynik** zwraca link do wideo (`videoUrl`), okładkę (`coverUrl`), zu�
 
 Klucze API trzymasz wyłącznie w n8n. W repozytorium nie ma żadnych kluczy, a plik JSON odwołuje się tylko do nazw poświadczeń.
 
-Oba poświadczenia są typu **Header Auth** (Credentials > Add credential > Header Auth):
+Oba poświadczenia są typu **Header Auth** (Credentials > Add credential > Header Auth). Uwaga: w OpenAI nagłówek to `Authorization`, a wartość zaczyna się od słowa `Bearer` i spacji.
 
 | Nazwa poświadczenia | Name (nagłówek) | Value | Gdzie wziąć klucz | Węzły |
 |---|---|---|---|---|
-| `Anthropic API` | `x-api-key` | klucz Claude API | [console.anthropic.com](https://console.anthropic.com/) > API Keys | Claude: scenariusz i prompt |
+| `OpenAI API` | `Authorization` | `Bearer ` + klucz OpenAI, np. `Bearer sk-...` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | OpenAI: scenariusz i prompt |
 | `Pollo.ai API` | `x-api-key` | klucz Pollo.ai | panel Pollo.ai, sekcja API Keys ([instrukcja](https://docs.pollo.ai/quick-start)) | Pollo.ai: utwórz wideo, Pollo.ai: status zadania |
 
 Po imporcie n8n może pokazać ostrzeżenie przy tych węzłach. Otwórz każdy z nich i wybierz właściwe poświadczenie z listy.
@@ -78,12 +78,12 @@ Na górze węzła **Normalizuj dane i ustawienia** jest obiekt `SETTINGS`:
 | `resolution` | `720p` | Pollo 1.6: `480p`, `720p`, `1080p`. Veo 3.1 Fast: `720p`, `1080p`, `4k`. |
 | `length` | `5` | Długość w sekundach. Pollo 1.6: `5` lub `10`. Veo 3.1 Fast: `4`, `6` lub `8`. |
 | `aspectRatio` | `9:16` | Pionowe wideo. |
-| `claudeModel` | `claude-opus-5-5` | Model Claude, który pisze scenariusz. |
+| `llmModel` | `gpt-4o` | Model OpenAI, który pisze scenariusz. |
 | `language` | `polski` | Język tekstów reklamy. Prompt do wideo jest zawsze po angielsku. |
 
 Pollo 1.6 w trybie zdjęcie-na-wideo bierze proporcje ze zdjęcia, więc do pionowej reklamy podawaj pionowe zdjęcie. Veo 3.1 Fast wymusza 9:16 w obu trybach.
 
-Węzeł **Sprawdź status** czeka maksymalnie 60 sprawdzeń po 20 s (20 minut), a potem kończy wykonanie błędem. Błąd pojawia się też, gdy Pollo.ai zwróci status `failed` albo Claude odmówi odpowiedzi.
+Węzeł **Sprawdź status** czeka maksymalnie 60 sprawdzeń po 20 s (20 minut), a potem kończy wykonanie błędem. Błąd pojawia się też, gdy Pollo.ai zwróci status `failed` albo OpenAI odmówi odpowiedzi.
 
 Uwaga na limit czasu wykonania w n8n. Jeśli Twoja instancja ma ustawione `EXECUTIONS_TIMEOUT` (np. 120 s), workflow zostanie przerwany, zanim wideo się wygeneruje. Ustaw limit na co najmniej 1800 s (zmienne `EXECUTIONS_TIMEOUT` i `EXECUTIONS_TIMEOUT_MAX` w kontenerze, potem restart n8n) albo podnieś go w ustawieniach workflow (Settings > Timeout Workflow).
 
@@ -92,4 +92,4 @@ Testowy adres formularza (`form-test/...`) działa tylko chwilę po kliknięciu 
 ## Dokumentacja API
 
 - Pollo.ai: [Pollo 1.6](https://docs.pollo.ai/m/pollo/pollo-v1-6), [Veo 3.1 Fast](https://docs.pollo.ai/m/google/veo3-1-fast), [status zadania](https://docs.pollo.ai/task/get-task-status), [webhooki](https://docs.pollo.ai/webhooks)
-- Claude: [Messages API](https://docs.claude.com/en/api/messages)
+- OpenAI: [Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs)
