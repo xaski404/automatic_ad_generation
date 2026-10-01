@@ -407,7 +407,8 @@
   },
   "pinData": {},
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "executionTimeout": 1800
   },
   "active": false,
   "tags": []
