@@ -85,6 +85,10 @@ Pollo 1.6 w trybie zdjęcie-na-wideo bierze proporcje ze zdjęcia, więc do pion
 
 Węzeł **Sprawdź status** czeka maksymalnie 60 sprawdzeń po 20 s (20 minut), a potem kończy wykonanie błędem. Błąd pojawia się też, gdy Pollo.ai zwróci status `failed` albo Claude odmówi odpowiedzi.
 
+Uwaga na limit czasu wykonania w n8n. Jeśli Twoja instancja ma ustawione `EXECUTIONS_TIMEOUT` (np. 120 s), workflow zostanie przerwany, zanim wideo się wygeneruje. Ustaw limit na co najmniej 1800 s (zmienne `EXECUTIONS_TIMEOUT` i `EXECUTIONS_TIMEOUT_MAX` w kontenerze, potem restart n8n) albo podnieś go w ustawieniach workflow (Settings > Timeout Workflow).
+
+Testowy adres formularza (`form-test/...`) działa tylko chwilę po kliknięciu **Execute workflow** i tylko na jedno wysłanie.
+
 ## Dokumentacja API
 
 - Pollo.ai: [Pollo 1.6](https://docs.pollo.ai/m/pollo/pollo-v1-6), [Veo 3.1 Fast](https://docs.pollo.ai/m/google/veo3-1-fast), [status zadania](https://docs.pollo.ai/task/get-task-status), [webhooki](https://docs.pollo.ai/webhooks)
