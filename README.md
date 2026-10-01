@@ -1,4 +1,4 @@
-# Automatyczne reklamy wideo (n8n + OpenAI + Pollo.ai)
+# Automatyczne reklamy wideo (n8n + OpenAI + Higgsfield)
 
 Workflow n8n, który z krótkiego opisu produktu robi pionową reklamę wideo 9:16 pod TikTok, Instagram Reels i YouTube Shorts.
 
@@ -6,7 +6,7 @@ Etap 1 (ten workflow) obejmuje kroki 1 do 3 planu:
 
 1. **Wejście:** formularz n8n albo webhook `POST` z danymi produktu.
 2. **Scenariusz:** OpenAI (GPT-4o) pisze hook, tekst lektora, napisy na ekran, CTA i angielski prompt do wideo.
-3. **Generowanie:** Pollo.ai tworzy wideo 9:16, a workflow co 20 s sprawdza status, aż wideo będzie gotowe.
+3. **Generowanie:** Higgsfield (model Kling 2.6) tworzy wideo 9:16, a workflow co 20 s sprawdza status, aż wideo będzie gotowe.
 
 Wersje pod poszczególne platformy, akceptacja i publikacja to kolejne etapy.
 
@@ -16,13 +16,13 @@ Wersje pod poszczególne platformy, akceptacja i publikacja to kolejne etapy.
 Formularz reklamy ─┐
                    ├─> Normalizuj dane i ustawienia ─> Zbuduj zapytanie do AI ─> OpenAI: scenariusz i prompt
 Webhook API ───────┘
-  ─> Parsuj scenariusz ─> Pollo.ai: utwórz wideo ─> Zapamiętaj taskId
-  ─> Czekaj 20 s ─> Pollo.ai: status zadania ─> Sprawdź status ─> Wideo gotowe? ─ tak ─> Wynik
+  ─> Parsuj scenariusz ─> Higgsfield: utwórz wideo ─> Zapamiętaj ID zadania
+  ─> Czekaj 20 s ─> Higgsfield: status zadania ─> Sprawdź status ─> Wideo gotowe? ─ tak ─> Wynik
                 ^                                                              │
                 └──────────────────────────── nie ─────────────────────────────┘
 ```
 
-Węzeł **Wynik** zwraca link do wideo (`videoUrl`), okładkę (`coverUrl`), zużyte kredyty i cały scenariusz. Pollo.ai przechowuje pliki tylko do 14 dni, więc pobierz wideo albo zapisz je u siebie.
+Węzeł **Wynik** zwraca link do wideo (`videoUrl`) i cały scenariusz. Pobierz wideo albo zapisz je u siebie, bo link od dostawcy nie musi działać zawsze.
 
 ## Import do n8n
 
@@ -40,7 +40,7 @@ Potrzebne są dwa poświadczenia (Credentials > Add credential):
 | Nazwa poświadczenia | Name (nagłówek) | Value | Gdzie wziąć klucz | Węzły |
 |---|---|---|---|---|
 | `OpenAI account` (typ **OpenAI**) | nie dotyczy | klucz OpenAI w polu API Key | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | OpenAI: scenariusz i prompt |
-| `Pollo.ai API` (typ **Header Auth**) | `x-api-key` | klucz Pollo.ai | panel Pollo.ai, sekcja API Keys ([instrukcja](https://docs.pollo.ai/quick-start)) | Pollo.ai: utwórz wideo, Pollo.ai: status zadania |
+| `Higgsfield API` (typ **Header Auth**) | `Authorization` | `Key ` + ID klucza + `:` + sekret, np. `Key abc123:xyz789` | panel Higgsfield API, sekcja **API keys** ([instrukcja](https://docs.higgsfield.ai/docs/authentication)) | Higgsfield: utwórz wideo, Higgsfield: status zadania |
 
 Po imporcie n8n może pokazać ostrzeżenie przy tych węzłach. Otwórz każdy z nich i wybierz właściwe poświadczenie z listy.
 
@@ -54,7 +54,7 @@ Otwórz węzeł **Formularz reklamy** i skopiuj **Production URL** (albo **Test 
 - **Opis produktu** (wymagane)
 - **Styl reklamy**, np. dynamiczny, zabawny, premium, UGC
 - **Wezwanie do działania (CTA)**
-- **URL zdjęcia produktu** (opcjonalnie, musi być `https://`, JPG lub PNG). Gdy je podasz, Pollo.ai użyje zdjęcia jako pierwszej klatki.
+- **URL zdjęcia produktu** (opcjonalnie, musi być `https://`, JPG lub PNG). Gdy je podasz, Higgsfield użyje zdjęcia jako pierwszej klatki.
 
 Formularz od razu potwierdza przyjęcie, a wynik zobaczysz w zakładce **Executions**.
 
@@ -74,16 +74,14 @@ Na górze węzła **Normalizuj dane i ustawienia** jest obiekt `SETTINGS`:
 
 | Pole | Domyślnie | Opis |
 |---|---|---|
-| `polloModel` | `pollo/pollo-v1-6` | Model Pollo.ai. Alternatywa: `google/veo3-1-fast` (droższy, generuje też dźwięk). |
-| `resolution` | `720p` | Pollo 1.6: `480p`, `720p`, `1080p`. Veo 3.1 Fast: `720p`, `1080p`, `4k`. |
-| `length` | `5` | Długość w sekundach. Pollo 1.6: `5` lub `10`. Veo 3.1 Fast: `4`, `6` lub `8`. |
-| `aspectRatio` | `9:16` | Pionowe wideo. |
+| `videoModel` | `kling-video/v2.6/pro` | Model w API Higgsfield. Workflow dokleja `/text-to-video` albo `/image-to-video` (gdy podasz zdjęcie). |
+| `length` | `5` | Długość w sekundach: `5` lub `10`. |
+| `aspectRatio` | `9:16` | Pionowe wideo (`16:9`, `9:16` albo `1:1`). |
+| `sound` | `off` | `on` dogeneruje dźwięk do wideo, ale kosztuje więcej. |
 | `llmModel` | `gpt-4o` | Model OpenAI, który pisze scenariusz. |
 | `language` | `polski` | Język tekstów reklamy. Prompt do wideo jest zawsze po angielsku. |
 
-Pollo 1.6 w trybie zdjęcie-na-wideo bierze proporcje ze zdjęcia, więc do pionowej reklamy podawaj pionowe zdjęcie. Veo 3.1 Fast wymusza 9:16 w obu trybach.
-
-Węzeł **Sprawdź status** czeka maksymalnie 60 sprawdzeń po 20 s (20 minut), a potem kończy wykonanie błędem. Błąd pojawia się też, gdy Pollo.ai zwróci status `failed` albo OpenAI odmówi odpowiedzi.
+Węzeł **Sprawdź status** czeka maksymalnie 60 sprawdzeń po 20 s (20 minut), a potem kończy wykonanie błędem. Błąd pojawia się też, gdy Higgsfield zwróci status `failed`, `nsfw` albo `canceled` albo OpenAI odmówi odpowiedzi.
 
 Uwaga na limit czasu wykonania w n8n. Jeśli Twoja instancja ma ustawione `EXECUTIONS_TIMEOUT` (np. 120 s), workflow zostanie przerwany, zanim wideo się wygeneruje. Ustaw limit na co najmniej 1800 s (zmienne `EXECUTIONS_TIMEOUT` i `EXECUTIONS_TIMEOUT_MAX` w kontenerze, potem restart n8n) albo podnieś go w ustawieniach workflow (Settings > Timeout Workflow).
 
@@ -91,5 +89,5 @@ Testowy adres formularza (`form-test/...`) działa tylko chwilę po kliknięciu 
 
 ## Dokumentacja API
 
-- Pollo.ai: [Pollo 1.6](https://docs.pollo.ai/m/pollo/pollo-v1-6), [Veo 3.1 Fast](https://docs.pollo.ai/m/google/veo3-1-fast), [status zadania](https://docs.pollo.ai/task/get-task-status), [webhooki](https://docs.pollo.ai/webhooks)
+- Higgsfield: [Kling 2.6 tekst na wideo](https://docs.higgsfield.ai/docs/models/kling-2-6/pro-text-to-video), [Kling 2.6 zdjęcie na wideo](https://docs.higgsfield.ai/docs/models/kling-2-6/pro-image-to-video), [status zadania](https://docs.higgsfield.ai/docs/api-reference/requests/get-request-status), [uwierzytelnianie](https://docs.higgsfield.ai/docs/authentication)
 - OpenAI: [Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs)
