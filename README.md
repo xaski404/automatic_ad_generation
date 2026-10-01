@@ -35,12 +35,12 @@ Węzeł **Wynik** zwraca link do wideo (`videoUrl`), okładkę (`coverUrl`), zu�
 
 Klucze API trzymasz wyłącznie w n8n. W repozytorium nie ma żadnych kluczy, a plik JSON odwołuje się tylko do nazw poświadczeń.
 
-Oba poświadczenia są typu **Header Auth** (Credentials > Add credential > Header Auth). Uwaga: w OpenAI nagłówek to `Authorization`, a wartość zaczyna się od słowa `Bearer` i spacji.
+Potrzebne są dwa poświadczenia (Credentials > Add credential):
 
 | Nazwa poświadczenia | Name (nagłówek) | Value | Gdzie wziąć klucz | Węzły |
 |---|---|---|---|---|
-| `OpenAI API` | `Authorization` | `Bearer ` + klucz OpenAI, np. `Bearer sk-...` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | OpenAI: scenariusz i prompt |
-| `Pollo.ai API` | `x-api-key` | klucz Pollo.ai | panel Pollo.ai, sekcja API Keys ([instrukcja](https://docs.pollo.ai/quick-start)) | Pollo.ai: utwórz wideo, Pollo.ai: status zadania |
+| `OpenAI account` (typ **OpenAI**) | nie dotyczy | klucz OpenAI w polu API Key | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | OpenAI: scenariusz i prompt |
+| `Pollo.ai API` (typ **Header Auth**) | `x-api-key` | klucz Pollo.ai | panel Pollo.ai, sekcja API Keys ([instrukcja](https://docs.pollo.ai/quick-start)) | Pollo.ai: utwórz wideo, Pollo.ai: status zadania |
 
 Po imporcie n8n może pokazać ostrzeżenie przy tych węzłach. Otwórz każdy z nich i wybierz właściwe poświadczenie z listy.
 
