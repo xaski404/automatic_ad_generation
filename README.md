@@ -75,7 +75,7 @@ Na górze węzła **Normalizuj dane i ustawienia** jest obiekt `SETTINGS`:
 | Pole | Domyślnie | Opis |
 |---|---|---|
 | `videoModel` | `kling-video/v2.6/pro` | Model w API Higgsfield. Workflow dokleja `/text-to-video` albo `/image-to-video` (gdy podasz zdjęcie). |
-| `length` | `5` | Długość w sekundach: `5` lub `10`. |
+| `length` | `10` | Długość w sekundach: `5` lub `10`. |
 | `aspectRatio` | `9:16` | Pionowe wideo (`16:9`, `9:16` albo `1:1`). |
 | `sound` | `off` | `on` dogeneruje dźwięk do wideo, ale kosztuje więcej. |
 | `llmModel` | `gpt-4o` | Model OpenAI, który pisze scenariusz. |
