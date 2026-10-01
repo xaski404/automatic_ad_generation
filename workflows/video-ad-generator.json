@@ -1,0 +1,426 @@
+{
+  "name": "Reklama wideo: scenariusz + Pollo.ai",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Nowa reklama wideo",
+        "formDescription": "Opisz produkt, a workflow napisze scenariusz i wygeneruje pionowe wideo 9:16.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Produkt",
+              "placeholder": "np. Butelka termiczna EcoSip",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Opis produktu",
+              "fieldType": "textarea",
+              "placeholder": "Co to jest, dla kogo, co go wyróżnia",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Styl reklamy",
+              "placeholder": "np. dynamiczny, zabawny, premium, UGC"
+            },
+            {
+              "fieldLabel": "Wezwanie do działania (CTA)",
+              "placeholder": "np. Kup teraz z kodem START10"
+            },
+            {
+              "fieldLabel": "URL zdjęcia produktu (opcjonalnie)",
+              "placeholder": "https://... (JPG lub PNG, najlepiej pionowe)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000001",
+      "name": "Formularz reklamy",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "a1f0c001-0000-4000-8000-0000000000f1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "video-ad",
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000002",
+      "name": "Webhook API",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "a1f0c001-0000-4000-8000-0000000000f2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Łączy dane z formularza i z webhooka w jeden format\n// oraz dokłada ustawienia generowania wideo.\nconst SETTINGS = {\n  // Ścieżka modelu w API Pollo.ai, np. 'pollo/pollo-v1-6' albo 'google/veo3-1-fast'\n  polloModel: 'pollo/pollo-v1-6',\n  resolution: '720p',\n  length: 5,            // pollo-v1-6: 5 lub 10 s; veo3-1-fast: 4, 6 lub 8 s\n  aspectRatio: '9:16',\n  claudeModel: 'claude-opus-5-5',\n  language: 'polski',   // język tekstów reklamy (prompt wideo zawsze po angielsku)\n};\n\nreturn $input.all().map((item) => {\n  const src = item.json.body ?? item.json; // webhook trzyma dane w \"body\"\n  const pick = (...keys) => {\n    for (const k of keys) {\n      const v = src[k];\n      if (typeof v === 'string' && v.trim() !== '') return v.trim();\n    }\n    return '';\n  };\n\n  const ad = {\n    product: pick('Produkt', 'product'),\n    description: pick('Opis produktu', 'description'),\n    style: pick('Styl reklamy', 'style'),\n    cta: pick('Wezwanie do działania (CTA)', 'cta'),\n    imageUrl: pick('URL zdjęcia produktu (opcjonalnie)', 'imageUrl'),\n  };\n\n  if (!ad.product || !ad.description) {\n    throw new Error('Brak wymaganych pól: produkt i opis produktu.');\n  }\n  if (ad.imageUrl && !ad.imageUrl.startsWith('https://')) {\n    throw new Error('URL zdjęcia musi zaczynać się od https:// (wymóg Pollo.ai).');\n  }\n\n  return { json: { ad, settings: SETTINGS } };\n});"
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000003",
+      "name": "Normalizuj dane i ustawienia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Buduje zapytanie do Claude: scenariusz reklamy + prompt do wideo.\nconst { ad, settings } = $input.first().json;\n\nconst schema = {\n  type: 'object',\n  additionalProperties: false,\n  required: ['hook', 'script', 'onScreenText', 'cta', 'videoPrompt'],\n  properties: {\n    hook: { type: 'string', description: 'Pierwsze zdanie, które zatrzymuje scrollowanie' },\n    script: { type: 'string', description: 'Pełny tekst lektora / narracji' },\n    onScreenText: {\n      type: 'array',\n      items: { type: 'string' },\n      description: 'Krótkie napisy na ekranie, w kolejności',\n    },\n    cta: { type: 'string', description: 'Wezwanie do działania na koniec' },\n    videoPrompt: {\n      type: 'string',\n      description: 'Prompt po angielsku dla generatora wideo, maks. 900 znaków',\n    },\n  },\n};\n\nconst system = [\n  'Jesteś copywriterem i reżyserem krótkich reklam wideo na TikTok, Instagram Reels i YouTube Shorts.',\n  `Piszesz teksty w języku: ${settings.language}. Wideo jest pionowe 9:16 i trwa ${settings.length} sekund, więc scenariusz musi się zmieścić w tym czasie.`,\n  'Pole videoPrompt piszesz po angielsku dla modelu tekst-na-wideo: opisz jedno spójne ujęcie (obiekt, akcję, ruch kamery, światło, nastrój),',\n  'pionowy kadr, bez tekstu i napisów w obrazie, bez logo i znaków towarowych, maks. 900 znaków.',\n  ad.imageUrl\n    ? 'Do wideo zostanie użyte zdjęcie produktu jako pierwsza klatka, więc videoPrompt opisuje, jak ta scena ma się poruszać.'\n    : '',\n].filter(Boolean).join(' ');\n\nconst user = [\n  `Produkt: ${ad.product}`,\n  `Opis: ${ad.description}`,\n  `Styl reklamy: ${ad.style || 'dowolny, dopasuj do produktu'}`,\n  `Wezwanie do działania: ${ad.cta || 'zaproponuj'}`,\n].join('\\n');\n\nreturn [{\n  json: {\n    ad,\n    settings,\n    claudeRequest: {\n      model: settings.claudeModel,\n      max_tokens: 16000,\n      fallbacks: 'default',\n      output_config: {\n        effort: 'medium',\n        format: { type: 'json_schema', schema },\n      },\n      system,\n      messages: [{ role: 'user', content: user }],\n    },\n  },\n}];"
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000004",
+      "name": "Zbuduj zapytanie do Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "anthropic-beta",
+              "value": "server-side-fallback-2026-07-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.claudeRequest) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000005",
+      "name": "Claude: scenariusz i prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ANTHROPIC_CREDENTIAL",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Odczytuje JSON od Claude i buduje zapytanie do Pollo.ai.\nconst res = $input.first().json;\nconst { ad, settings } = $('Zbuduj zapytanie do Claude').first().json;\n\nif (res.stop_reason === 'refusal') {\n  throw new Error('Claude odmówił napisania scenariusza: ' + JSON.stringify(res.stop_details ?? {}));\n}\nif (res.stop_reason === 'max_tokens') {\n  throw new Error('Odpowiedź Claude została ucięta (max_tokens).');\n}\nconst textBlock = (res.content ?? []).find((b) => b.type === 'text');\nif (!textBlock) throw new Error('Brak tekstu w odpowiedzi Claude: ' + JSON.stringify(res));\nconst scenario = JSON.parse(textBlock.text);\n\nconst input = {\n  prompt: scenario.videoPrompt.slice(0, 1000),\n  resolution: settings.resolution,\n  length: settings.length,\n};\nif (ad.imageUrl) input.image = ad.imageUrl;\n// Pollo 1.6 w trybie zdjęcie-na-wideo nie przyjmuje aspectRatio (bierze proporcje ze zdjęcia).\nconst isPolloImage = settings.polloModel.startsWith('pollo/') && ad.imageUrl;\nif (!isPolloImage) input.aspectRatio = settings.aspectRatio;\n\nreturn [{\n  json: {\n    ad,\n    settings,\n    scenario,\n    polloUrl: 'https://pollo.ai/api/platform/generation/' + settings.polloModel,\n    polloRequest: { input },\n  },\n}];"
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000006",
+      "name": "Parsuj scenariusz",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.polloUrl }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.polloRequest) }}",
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000007",
+      "name": "Pollo.ai: utwórz wideo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_POLLO_CREDENTIAL",
+          "name": "Pollo.ai API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Zapamiętuje taskId zwrócony przez Pollo.ai.\nconst res = $input.first().json;\nconst data = res.data ?? res; // na wypadek odpowiedzi opakowanej w \"data\"\nif (!data.taskId) throw new Error('Pollo.ai nie zwróciło taskId: ' + JSON.stringify(res));\nconst prev = $('Parsuj scenariusz').first().json;\nreturn [{ json: { ...prev, taskId: data.taskId } }];"
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000008",
+      "name": "Zapamiętaj taskId",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 20,
+        "unit": "seconds"
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000009",
+      "name": "Czekaj 20 s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        100
+      ],
+      "webhookId": "a1f0c001-0000-4000-8000-0000000000f3"
+    },
+    {
+      "parameters": {
+        "url": "=https://pollo.ai/api/platform/v1/generation/{{ $('Zapamiętaj taskId').first().json.taskId }}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-00000000000a",
+      "name": "Pollo.ai: status zadania",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_POLLO_CREDENTIAL",
+          "name": "Pollo.ai API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sprawdza status zadania. Rzuca błąd, gdy generowanie się nie powiodło\n// albo trwa zbyt długo.\nconst MAX_CHECKS = 60; // 60 x 20 s = 20 minut\n\nconst res = $input.first().json;\nconst data = res.data ?? res;\nconst gen = (data.generations ?? [])[0];\nconst status = gen?.status ?? data.status ?? 'waiting';\nconst task = $('Zapamiętaj taskId').first().json;\nconst checks = $runIndex + 1;\n\nif (status === 'failed') {\n  throw new Error('Pollo.ai: generowanie nie powiodło się. ' + (gen?.failMsg ?? ''));\n}\nif (status !== 'succeed' && checks >= MAX_CHECKS) {\n  throw new Error(`Pollo.ai: wideo nie jest gotowe po ${checks} sprawdzeniach (taskId ${task.taskId}).`);\n}\n\nreturn [{\n  json: {\n    done: status === 'succeed',\n    status,\n    checks,\n    taskId: task.taskId,\n    videoUrl: gen?.url ?? null,\n    coverUrl: gen?.cover ?? null,\n    credit: data.credit ?? null,\n  },\n}];"
+      },
+      "id": "a1f0c001-0000-4000-8000-00000000000b",
+      "name": "Sprawdź status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "a1f0c001-0000-4000-8000-0000000000c1",
+              "leftValue": "={{ $json.done }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-00000000000c",
+      "name": "Wideo gotowe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Wynik końcowy: scenariusz + link do wideo (Pollo.ai trzyma pliki do 14 dni).\nconst task = $('Zapamiętaj taskId').first().json;\nconst s = $input.first().json;\nreturn [{\n  json: {\n    product: task.ad.product,\n    videoUrl: s.videoUrl,\n    coverUrl: s.coverUrl,\n    taskId: s.taskId,\n    credit: s.credit,\n    hook: task.scenario.hook,\n    script: task.scenario.script,\n    onScreenText: task.scenario.onScreenText,\n    cta: task.scenario.cta,\n    videoPrompt: task.scenario.videoPrompt,\n    polloModel: task.settings.polloModel,\n    createdAt: new Date().toISOString(),\n  },\n}];"
+      },
+      "id": "a1f0c001-0000-4000-8000-00000000000d",
+      "name": "Wynik",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Formularz reklamy": {
+      "main": [
+        [
+          {
+            "node": "Normalizuj dane i ustawienia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook API": {
+      "main": [
+        [
+          {
+            "node": "Normalizuj dane i ustawienia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizuj dane i ustawienia": {
+      "main": [
+        [
+          {
+            "node": "Zbuduj zapytanie do Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zbuduj zapytanie do Claude": {
+      "main": [
+        [
+          {
+            "node": "Claude: scenariusz i prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: scenariusz i prompt": {
+      "main": [
+        [
+          {
+            "node": "Parsuj scenariusz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsuj scenariusz": {
+      "main": [
+        [
+          {
+            "node": "Pollo.ai: utwórz wideo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pollo.ai: utwórz wideo": {
+      "main": [
+        [
+          {
+            "node": "Zapamiętaj taskId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zapamiętaj taskId": {
+      "main": [
+        [
+          {
+            "node": "Czekaj 20 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Czekaj 20 s": {
+      "main": [
+        [
+          {
+            "node": "Pollo.ai: status zadania",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pollo.ai: status zadania": {
+      "main": [
+        [
+          {
+            "node": "Sprawdź status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sprawdź status": {
+      "main": [
+        [
+          {
+            "node": "Wideo gotowe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wideo gotowe?": {
+      "main": [
+        [
+          {
+            "node": "Wynik",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Czekaj 20 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "tags": []
+}
