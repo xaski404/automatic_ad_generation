@@ -87,7 +87,50 @@ Uwaga na limit czasu wykonania w n8n. Jeśli Twoja instancja ma ustawione `EXECU
 
 Testowy adres formularza (`form-test/...`) działa tylko chwilę po kliknięciu **Execute workflow** i tylko na jedno wysłanie.
 
+## Workflow 2: próbka Reelsa dla firmy (meble na wymiar)
+
+Plik [`workflows/reels-sample-for-company.json`](workflows/reels-sample-for-company.json). Służy do pozyskiwania klientów: dla wybranej firmy od mebli na wymiar przygotowuje darmową próbkę edukacyjnego Reelsa i wiadomość do właściciela.
+
+```
+Formularz próbki ─┐
+                  ├─> Normalizuj dane ─> Jest strona www? ─ tak ─> Pobierz stronę firmy ─┐
+Webhook API ──────┘                                    └── nie ──────────────────────────┴─> Zbuduj zapytanie do AI
+  ─> OpenAI: analiza i scenariusz ─> Parsuj scenariusz ─> Generować wideo? ─ nie ─> Wynik: scenariusz
+                                                                     └── tak ─> OpenAI: lektor ─> Długość lektora i plan ujęć
+  ─> Higgsfield: utwórz klipy ─> Zapamiętaj ID klipów ─> Czekaj 20 s ─> Rozbij na zadania ─> Higgsfield: status klipów
+  ─> Sprawdź statusy ─> Klipy gotowe? ─ tak ─> Wynik: próbka z wideo
+                  (nie: wraca do „Czekaj 20 s”)
+```
+
+Co robi:
+
+1. Pobiera tekst ze strony firmy (jeśli podasz adres) i bierze Twoje notatki, np. wklejone opinie z Google.
+2. GPT-4o opisuje firmę, proponuje 3 tematy edukacyjne („3 błędy przy projektowaniu kuchni…”), wybiera jeden i pisze tekst lektora na ok. 15 s, napisy, ujęcia do wideo, opis posta i wiadomość do właściciela. Twierdzenia, które warto sprawdzić, trafiają do listy `factsToCheck`.
+3. Tryb **Tylko scenariusz i wiadomość** kończy się tutaj i kosztuje ok. 0,03 USD. Wideo robisz dopiero dla firm, które odpiszą.
+4. Tryb **Scenariusz + wideo** najpierw nagrywa polskiego lektora (OpenAI TTS), mierzy jego prawdziwą długość i na tej podstawie zleca odpowiednią liczbę klipów Kling 5 s bez dźwięku (maks. 4). Wszystkie klipy są zlecane naraz, a workflow co 20 s sprawdza je razem.
+
+Wynik z wideo zawiera: plik `lektor.wav` (zakładka Binary w wyniku), linki do klipów w kolejności (`clipUrls`), napisy `subtitlesSrt` do zaimportowania w CapCut, opis posta, wiadomość do firmy i szacowany koszt. Montaż (sklejenie klipów, lektor, napisy, muzyka) robisz na razie ręcznie w CapCut lub innym edytorze.
+
+Koszt próbki z wideo: ok. 0,35 USD za klip, czyli ok. 1,1 USD za 3 klipy (15 s).
+
+Pola formularza i webhooka (`POST /webhook/reels-sample`, przykład w [`examples/reels-sample-request.json`](examples/reels-sample-request.json)):
+
+| Formularz | Webhook | Opis |
+|---|---|---|
+| Nazwa firmy | `companyName` | wymagane |
+| Strona www firmy | `website` | strona albo notatki są wymagane |
+| Miasto | `city` | |
+| Profil na Instagramie | `instagram` | |
+| Opinie klientów i notatki | `notes` | wklej opinie z Google i to, co zauważyłeś na profilu |
+| Co przygotować | `mode` | `Tylko scenariusz i wiadomość` albo `Scenariusz + wideo` |
+
+Ustawienia są w obiekcie `SETTINGS` w węźle **Normalizuj dane i ustawienia**: branża, docelowa długość lektora, maks. liczba klipów, głos lektora (`ttsVoice`), podpis w wiadomości (`sender`).
+
+Poświadczenia są te same co w workflow 1: `OpenAI account` (scenariusz i lektor) i `Higgsfield API` (klipy).
+
+Wiadomość do firmy wysyłasz sam, np. na Instagramie. Workflow niczego nie wysyła.
+
 ## Dokumentacja API
 
 - Higgsfield: [Kling 2.6 tekst na wideo](https://docs.higgsfield.ai/docs/models/kling-2-6/pro-text-to-video), [Kling 2.6 zdjęcie na wideo](https://docs.higgsfield.ai/docs/models/kling-2-6/pro-image-to-video), [status zadania](https://docs.higgsfield.ai/docs/api-reference/requests/get-request-status), [uwierzytelnianie](https://docs.higgsfield.ai/docs/authentication)
-- OpenAI: [Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs)
+- OpenAI: [Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs), [Text to speech](https://platform.openai.com/docs/guides/text-to-speech)
